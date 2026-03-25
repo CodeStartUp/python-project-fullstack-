@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HWID Auth System - Dashboard</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <div class="container">
+        <div class="dashboard" id="dashboard" style="display: none;">
+            <h1>Welcome, <span id="username"></span>!</h1>
+            <div class="card">
+                <h2>User Information</h2>
+                <p><strong>Email:</strong> <span id="email"></span></p>
+                <p><strong>Account Created:</strong> <span id="created_at"></span></p>
+                <p><strong>HWID Status:</strong> <span id="hwid_status"></span></p>
+                <p><strong>HWID:</strong> <span id="hwid_value"></span></p>
+            </div>
+            <div class="card">
+                <h2>Bind New HWID</h2>
+                <input type="text" id="new_hwid" placeholder="Enter your new HWID" required>
+                <button onclick="bindHWID()">Bind HWID</button>
+            </div>
+            <button onclick="logout()" class="logout-btn">Logout</button>
+        </div>
+        <div class="auth-buttons" id="auth-buttons">
+            <h1>HWID Authentication System</h1>
+            <p>Please login or register to continue</p>
+            <button onclick="window.location.href='/login'">Login</button>
+            <button onclick="window.location.href='/register'">Register</button>
+        </div>
+    </div>
+    
+    <script src="/static/js/auth.js"></script>
+</body>
+</html>
