@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Select Game - Flappy Bird & Parkour</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            font-family: 'Arial', sans-serif;
+        }
+        
+        .navbar {
+            background: rgba(0,0,0,0.85) !important;
+            backdrop-filter: blur(10px);
+        }
+        
+        .games-container {
+            padding: 50px 20px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        .game-card {
+            background: white;
+            border-radius: 20px;
+            overflow: hidden;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.2);
+            transition: transform 0.3s, box-shadow 0.3s;
+            cursor: pointer;
+            height: 100%;
+        }
+        
+        .game-card:hover {
+            transform: translateY(-10px);
+            box-shadow: 0 30px 60px rgba(0,0,0,0.3);
+        }
+        
+        .game-preview {
+            height: 250px;
+            background-size: cover;
+            background-position: center;
+            position: relative;
+        }
+        
+        .game-preview::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.3);
+            transition: background 0.3s;
+        }
+        
+        .game-card:hover .game-preview::before {
+            background: rgba(0,0,0,0.1);
+        }
+        
+        .flappy-preview {
+            background-image: url('/static/bg.png');
+            background-color: #4EC0CA;
+        }
+        
+        .parkour-preview {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .parkour-preview::after {
+            content: '🎮 3D';
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(0,0,0,0.7);
+            color: gold;
+            padding: 5px 10px;
+            border-radius: 10px;
+            font-size: 12px;
+            font-weight: bold;
+            z-index: 1;
+        }
+        
+        .cube-preview {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 50px;
+            height: 50px;
+            background: rgba(255,0,0,0.8);
+            animation: bounce 1s infinite;
+            border-radius: 5px;
+        }
+        
+        @keyframes bounce {
+            0%, 100% { transform: translateX(-50%) translateY(0); }
+            50% { transform: translateX(-50%) translateY(-20px); }
+        }
+        
+        .game-info {
+            padding: 20px;
+        }
+        
+        .game-title {
+            font-size: 1.5em;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+        
+        .game-description {
+            color: #666;
+            margin-bottom: 15px;
+        }
+        
+        .game-stats {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid #eee;
+        }
+        
+        .play-btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: transform 0.2s;
+            width: 100%;
+            font-weight: bold;
+        }
+        
+        .play-btn:hover {
+            transform: scale(1.05);
+        }
+        
+        .badge-3d {
+            background: #ff6b6b;
+            color: white;
+            padding: 3px 8px;
+            border-radius: 5px;
+            font-size: 11px;
+            margin-left: 10px;
+        }
+        
+        @media (max-width: 768px) {
+            .games-container {
+                padding: 30px 15px;
+            }
+            
+            .game-preview {
+                height: 200px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-dark">
+        <div class="container-fluid">
+            <span class="navbar-brand" style="font-size: 1.5em;">
+                🎮 Game Hub
+            </span>
+            <div class="d-flex align-items-center">
+                <span class="navbar-text me-3">
+                    Welcome, <strong>{{ username }}</strong>!
+                </span>
+                <a href="/dashboard" class="btn btn-outline-light btn-sm me-2">Dashboard</a>
+                <button class="btn btn-outline-danger btn-sm" onclick="logout()">Logout</button>
+            </div>
+        </div>
+    </nav>
+    
+    <div class="games-container">
+        <h1 class="text-center text-white mb-5">Choose Your Game</h1>
+        
+        <div class="row">
+            <!-- Flappy Bird Game -->
+            <div class="col-md-6 mb-4">
+                <div class="game-card" onclick="selectGame('flappy')">
+                    <div class="game-preview flappy-preview">
+                        <div style="position: absolute; bottom: 20px; left: 20px; color: white; font-weight: bold;">
+                            🐦 Classic
+                        </div>
+                    </div>
+                    <div class="game-info">
+                        <div class="game-title">
+                            Flappy Bird 🐦
+                        </div>
+                        <div class="game-description">
+                            Tap to fly through pipes! Classic arcade gameplay with progressive difficulty.
+                        </div>
+                        <div class="game-stats">
+                            <span>🏆 High Score: <strong id="flappyHighScore">{{ high_score }}</strong></span>
+                            <span>🎮 2D Platformer</span>
+                        </div>
+                        <button class="play-btn mt-3">Play Now →</button>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Parkour 3D Game -->
+            <div class="col-md-6 mb-4">
+                <div class="game-card" onclick="selectGame('parkour')">
+                    <div class="game-preview parkour-preview">
+                        <div class="cube-preview"></div>
+                        <div style="position: absolute; bottom: 20px; left: 20px; color: white; font-weight: bold;">
+                            🎮 3D Parkour
+                        </div>
+                    </div>
+                    <div class="game-info">
+                        <div class="game-title">
+                            3D Parkour Runner 🏃‍♂️
+                            <span class="badge-3d">3D</span>
+                        </div>
+                        <div class="game-description">
+                            Run, jump and dodge obstacles in 3D! Collect cubes and beat your high score!
+                        </div>
+                        <div class="game-stats">
+                            <span>🏆 Best Score: <strong id="parkourHighScore">{{ parkour_score|default(0) }}</strong></span>
+                            <span>🎮 3D Adventure</span>
+                        </div>
+                        <button class="play-btn mt-3">Play Now →</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        function selectGame(game) {
+            if (game === 'flappy') {
+                window.location.href = '/game';
+            } else if (game === 'parkour') {
+                window.location.href = '/parkour-game';
+            }
+        }
+        
+        async function logout() {
+            try {
+                const response = await fetch('/api/logout', { method: 'POST' });
+                if (response.ok) {
+                    document.cookie = 'access_token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
+                    window.location.href = '/';
+                }
+            } catch (error) {
+                console.error('Error logging out:', error);
+                window.location.href = '/';
+            }
+        }
+    </script>
+</body>
+</html>

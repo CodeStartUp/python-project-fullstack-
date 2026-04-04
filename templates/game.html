@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Playing Flappy Bird - {{ username }}</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            margin: 0;
+            padding: 0;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            font-family: 'Arial', sans-serif;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        .game-wrapper {
+            width: 100%;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+        
+        .game-container {
+            background: white;
+            padding: 20px;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            display: inline-block;
+        }
+        
+        canvas {
+            display: block;
+            margin: 0 auto;
+            border-radius: 10px;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.2);
+            cursor: pointer;
+        }
+        
+        .game-info {
+            margin-top: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+        
+        .player-info {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 10px 20px;
+            border-radius: 10px;
+            color: white;
+            font-weight: bold;
+        }
+        
+        .back-button, .fullscreen-button {
+            padding: 10px 25px;
+            color: white;
+            text-decoration: none;
+            border-radius: 10px;
+            transition: all 0.3s;
+            font-weight: bold;
+            display: inline-block;
+            border: none;
+            cursor: pointer;
+        }
+        
+        .back-button {
+            background: #dc3545;
+        }
+        
+        .fullscreen-button {
+            background: #28a745;
+        }
+        
+        .back-button:hover, .fullscreen-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+            color: white;
+        }
+        
+        .instructions {
+            margin-top: 15px;
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 10px;
+            text-align: center;
+            font-size: 14px;
+            color: #666;
+        }
+        
+        /* Fullscreen mode */
+        .game-container:-webkit-full-screen {
+            width: 100%;
+            height: 100%;
+            background: black;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        .game-container:-webkit-full-screen canvas {
+            width: auto;
+            height: 80vh;
+        }
+        
+        @media (max-width: 768px) {
+            .game-wrapper {
+                padding: 10px;
+            }
+            
+            .game-container {
+                padding: 15px;
+            }
+            
+            canvas {
+                width: 100%;
+                height: auto;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="game-wrapper">
+        <div class="game-container" id="gameContainer">
+            <canvas id="gameCanvas" width="400" height="600"></canvas>
+            <div class="game-info">
+                <div class="player-info">
+                    🐦 Player: {{ username }}
+                </div>
+                <div>
+                    <button class="fullscreen-button" onclick="toggleFullscreen()">
+                        🖥️ Full Screen
+                    </button>
+                    <a href="/dashboard" class="back-button">← Dashboard</a>
+                </div>
+            </div>
+            <div class="instructions">
+                🎮 Controls: Press SPACE, UP Arrow, or Click/Tap to make the bird fly!<br>
+                💡 Tip: Game speed increases as you score more points! Level up every 30 points!
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        function toggleFullscreen() {
+            const gameContainer = document.getElementById('gameContainer');
+            if (!document.fullscreenElement) {
+                gameContainer.requestFullscreen().catch(err => {
+                    console.log(`Error attempting fullscreen: ${err.message}`);
+                });
+            } else {
+                document.exitFullscreen();
+            }
+        }
+        
+        // Listen for fullscreen change
+        document.addEventListener('fullscreenchange', () => {
+            const gameContainer = document.getElementById('gameContainer');
+            if (document.fullscreenElement) {
+                gameContainer.style.background = 'black';
+            } else {
+                gameContainer.style.background = 'white';
+            }
+        });
+    </script>
+    
+    <script src="/static/js/game.js"></script>
+</body>
+</html>

@@ -1,9 +1,7 @@
 import os
 from dotenv import load_dotenv
 
-# Load environment variables
 load_dotenv()
-
 class Settings:
     # MongoDB Configuration
     MONGODB_URL = os.getenv("MONGODB_URL", "mongodb://localhost:27017")
@@ -18,5 +16,4 @@ class Settings:
     APP_NAME = os.getenv("APP_NAME", "Flappy Bird Game")
     DEBUG = os.getenv("DEBUG", "True").lower() == "true"
 
-# Create a single instance
 settings = Settings()

@@ -1,184 +1,454 @@
-from fastapi import FastAPI, HTTPException, status, Depends, Request, Form
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from fastapi import FastAPI, Request, HTTPException, Depends, status
+from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from fastapi.middleware.cors import CORSMiddleware
+from fastapi.security import OAuth2PasswordBearer
 from contextlib import asynccontextmanager
 from typing import Optional
-from datetime import timedelta
-import time
-from database import Database
-from models import UserCreate, UserLogin, Token, UserResponse, HWIDBindRequest
-from auth import (
-    get_password_hash, authenticate_user, create_access_token,
-    get_current_user, verify_password
-)
+import os
+
+from database import connect_to_mongo, close_mongo_connection, db, get_current_time
+from models import UserCreate, UserLogin, ScoreUpdate
+import auth
 from config import settings
-import logging
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
+# Lifespan context manager for startup/shutdown events
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
-    Database.connect_to_mongo()
+    print("🚀 Starting up Flappy Bird & Parkour Game Server...")
+    await connect_to_mongo()
+    print("✅ Database connected successfully!")
     yield
     # Shutdown
-    Database.close_mongo_connection()
+    print("🛑 Shutting down server...")
+    await close_mongo_connection()
+    print("✅ Database connection closed!")
 
-app = FastAPI(title=settings.APP_NAME, lifespan=lifespan)
+# Create FastAPI app
+app = FastAPI(title="Flappy Bird & Parkour Game", lifespan=lifespan)
 
-# CORS middleware
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-# Static files and templates
+# Mount static files
 app.mount("/static", StaticFiles(directory="static"), name="static")
+
+# Templates
 templates = Jinja2Templates(directory="templates")
 
-# API Routes
-@app.post("/api/register", response_model=Token)
-async def register(user_data: UserCreate):
-    db = Database.get_db()
-    
-    # Check if user exists
-    existing_user = db.users.find_one({
-        "$or": [
-            {"username": user_data.username},
-            {"email": user_data.email}
-        ]
-    })
-    
-    if existing_user:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Username or email already registered"
-        )
-    
-    # Check if HWID is already bound to another account
-    hwid_exists = db.users.find_one({"hwid": user_data.hwid})
-    if hwid_exists:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="HWID already bound to another account"
-        )
-    
-    # Create new user
-    hashed_password = get_password_hash(user_data.password)
-    user_dict = {
-        "username": user_data.username,
-        "email": user_data.email,
-        "hashed_password": hashed_password,
-        "hwid": user_data.hwid,
-        "is_active": True,
-        "created_at": datetime.utcnow(),
-        "last_login": None
-    }
-    
-    result = db.users.insert_one(user_dict)
-    user_dict["_id"] = result.inserted_id
-    
-    # Create token
-    access_token = create_access_token(
-        data={"sub": str(result.inserted_id)},
-        expires_delta=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-    )
-    
-    return {
-        "access_token": access_token,
-        "token_type": "bearer",
-        "user": UserResponse(
-            id=str(result.inserted_id),
-            username=user_data.username,
-            email=user_data.email,
-            is_active=True,
-            created_at=user_dict["created_at"],
-            hwid_bound=True
-        )
-    }
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token", auto_error=False)
 
-@app.post("/api/login", response_model=Token)
-async def login(user_data: UserLogin):
-    user = await authenticate_user(user_data.username, user_data.password, user_data.hwid)
-    
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid credentials or HWID mismatch",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-    
-    access_token = create_access_token(
-        data={"sub": str(user["_id"])},
-        expires_delta=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-    )
-    
-    return {
-        "access_token": access_token,
-        "token_type": "bearer",
-        "user": UserResponse(
-            id=str(user["_id"]),
-            username=user["username"],
-            email=user["email"],
-            is_active=user["is_active"],
-            created_at=user["created_at"],
-            hwid_bound=bool(user.get("hwid"))
-        )
-    }
+# Helper function to get current user
+async def get_current_user(token: Optional[str] = Depends(oauth2_scheme)):
+    if not token:
+        return None
+    username = auth.verify_token(token)
+    if not username:
+        return None
+    user = await db.db.users.find_one({"username": username})
+    return user
 
-@app.get("/api/me", response_model=UserResponse)
-async def get_me(current_user: dict = Depends(get_current_user)):
-    return UserResponse(
-        id=str(current_user["_id"]),
-        username=current_user["username"],
-        email=current_user["email"],
-        is_active=current_user["is_active"],
-        created_at=current_user["created_at"],
-        hwid_bound=bool(current_user.get("hwid"))
-    )
+# ==================== WEB ROUTES ====================
 
-@app.post("/api/bind-hwid")
-async def bind_hwid(
-    hwid_data: HWIDBindRequest,
-    current_user: dict = Depends(get_current_user)
-):
-    db = Database.get_db()
-    
-    # Check if HWID is already used
-    existing = db.users.find_one({"hwid": hwid_data.hwid})
-    if existing and existing["_id"] != current_user["_id"]:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="HWID already bound to another account"
-        )
-    
-    # Bind HWID to current user
-    db.users.update_one(
-        {"_id": current_user["_id"]},
-        {"$set": {"hwid": hwid_data.hwid}}
-    )
-    
-    return {"message": "HWID bound successfully"}
-
-# Frontend Routes
 @app.get("/", response_class=HTMLResponse)
 async def home(request: Request):
-    return templates.TemplateResponse("index.html", {"request": request})
-
-@app.get("/login", response_class=HTMLResponse)
-async def login_page(request: Request):
+    """Landing page with login/register options"""
     return templates.TemplateResponse("login.html", {"request": request})
 
 @app.get("/register", response_class=HTMLResponse)
 async def register_page(request: Request):
+    """Registration page"""
     return templates.TemplateResponse("register.html", {"request": request})
 
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000, reload=settings.DEBUG)
+@app.get("/dashboard", response_class=HTMLResponse)
+async def dashboard(request: Request):
+    """Dashboard showing user stats and high scores for both games"""
+    token = request.cookies.get("access_token")
+    if not token:
+        return RedirectResponse(url="/", status_code=303)
+    
+    username = auth.verify_token(token)
+    if not username:
+        return RedirectResponse(url="/", status_code=303)
+    
+    user = await db.db.users.find_one({"username": username})
+    
+    if not user:
+        return RedirectResponse(url="/", status_code=303)
+    
+    # Get leaderboard for Flappy Bird
+    flappy_leaderboard = await db.db.users.find(
+        {}, 
+        {"username": 1, "high_score": 1, "_id": 0}
+    ).sort("high_score", -1).limit(10).to_list(None)
+    
+    # Get leaderboard for Parkour
+    parkour_leaderboard = await db.db.users.find(
+        {}, 
+        {"username": 1, "parkour_score": 1, "_id": 0}
+    ).sort("parkour_score", -1).limit(10).to_list(None)
+    
+    return templates.TemplateResponse("dashboard.html", {
+        "request": request,
+        "username": username,
+        "high_score": user.get("high_score", 0),
+        "parkour_score": user.get("parkour_score", 0),
+        "total_games": user.get("total_games", 0),
+        "flappy_leaderboard": flappy_leaderboard,
+        "parkour_leaderboard": parkour_leaderboard
+    })
+
+@app.get("/game-select", response_class=HTMLResponse)
+async def game_select(request: Request):
+    """Game selection page"""
+    token = request.cookies.get("access_token")
+    if not token:
+        return RedirectResponse(url="/", status_code=303)
+    
+    username = auth.verify_token(token)
+    if not username:
+        return RedirectResponse(url="/", status_code=303)
+    
+    user = await db.db.users.find_one({"username": username})
+    
+    return templates.TemplateResponse("game_select.html", {
+        "request": request,
+        "username": username,
+        "high_score": user.get("high_score", 0),
+        "parkour_score": user.get("parkour_score", 0)
+    })
+
+@app.get("/game", response_class=HTMLResponse)
+async def flappy_game(request: Request):
+    """Flappy Bird Game page"""
+    token = request.cookies.get("access_token")
+    if not token:
+        return RedirectResponse(url="/", status_code=303)
+    
+    username = auth.verify_token(token)
+    if not username:
+        return RedirectResponse(url="/", status_code=303)
+    
+    return templates.TemplateResponse("game.html", {
+        "request": request,
+        "username": username
+    })
+
+@app.get("/parkour-game", response_class=HTMLResponse)
+async def parkour_game(request: Request):
+    """3D Parkour Game page"""
+    token = request.cookies.get("access_token")
+    if not token:
+        return RedirectResponse(url="/", status_code=303)
+    
+    username = auth.verify_token(token)
+    if not username:
+        return RedirectResponse(url="/", status_code=303)
+    
+    return templates.TemplateResponse("parkour.html", {
+        "request": request,
+        "username": username
+    })
+
+# ==================== API ROUTES ====================
+
+@app.post("/api/register")
+async def register_user(user_data: UserCreate):
+    """Register new user"""
+    try:
+        # Check if username or email exists
+        existing_user = await db.db.users.find_one({
+            "$or": [
+                {"username": user_data.username},
+                {"email": user_data.email}
+            ]
+        })
+        
+        if existing_user:
+            if existing_user.get("username") == user_data.username:
+                raise HTTPException(status_code=400, detail="Username already exists")
+            else:
+                raise HTTPException(status_code=400, detail="Email already exists")
+        
+        # Create new user
+        hashed_password = auth.get_password_hash(user_data.password)
+        user_dict = {
+            "username": user_data.username,
+            "email": user_data.email,
+            "password": hashed_password,
+            "high_score": 0,          # Flappy Bird high score
+            "parkour_score": 0,        # Parkour game high score
+            "total_games": 0,
+            "best_level": 1,
+            "avg_score": 0,
+            "created_at": get_current_time()
+        }
+        
+        result = await db.db.users.insert_one(user_dict)
+        
+        return JSONResponse(
+            status_code=201,
+            content={"message": "User created successfully", "username": user_data.username}
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error creating user: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+@app.post("/api/login")
+async def login_user(user_data: UserLogin):
+    """Login user and return token"""
+    try:
+        # Find user
+        user = await db.db.users.find_one({"username": user_data.username})
+        
+        if not user:
+            raise HTTPException(status_code=401, detail="Invalid username or password")
+        
+        # Verify password
+        if not auth.verify_password(user_data.password, user["password"]):
+            raise HTTPException(status_code=401, detail="Invalid username or password")
+        
+        # Create token
+        token = auth.create_access_token(data={"sub": user_data.username})
+        
+        return {"access_token": token, "token_type": "bearer", "username": user_data.username}
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error logging in: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+@app.post("/api/update-score")
+async def update_score(score_data: ScoreUpdate, request: Request):
+    """Update user's Flappy Bird high score and game count"""
+    try:
+        token = request.cookies.get("access_token")
+        if not token:
+            raise HTTPException(status_code=401, detail="Not authenticated")
+        
+        username = auth.verify_token(token)
+        if not username:
+            raise HTTPException(status_code=401, detail="Invalid token")
+        
+        # Get current user data
+        current_user = await db.db.users.find_one({"username": username})
+        current_total_games = current_user.get("total_games", 0)
+        
+        # Calculate new average score
+        new_avg_score = ((current_user.get("avg_score", 0) * current_total_games) + score_data.score) / (current_total_games + 1)
+        
+        # Update user stats
+        result = await db.db.users.update_one(
+            {"username": username},
+            {
+                "$inc": {"total_games": 1},
+                "$max": {"high_score": score_data.score},
+                "$set": {"avg_score": round(new_avg_score, 2)}
+            }
+        )
+        
+        if result.modified_count == 0 and result.matched_count == 0:
+            raise HTTPException(status_code=404, detail="User not found")
+        
+        # Get updated user data
+        updated_user = await db.db.users.find_one({"username": username})
+        
+        return {
+            "message": "Score updated successfully",
+            "high_score": updated_user.get("high_score", 0),
+            "total_games": updated_user.get("total_games", 0),
+            "avg_score": updated_user.get("avg_score", 0)
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error updating score: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+@app.post("/api/update-parkour-score")
+async def update_parkour_score(request: Request):
+    """Update parkour game score"""
+    try:
+        data = await request.json()
+        token = request.cookies.get("access_token")
+        if not token:
+            raise HTTPException(status_code=401, detail="Not authenticated")
+        
+        username = auth.verify_token(token)
+        if not username:
+            raise HTTPException(status_code=401, detail="Invalid token")
+        
+        score = data.get("score", 0)
+        
+        # Update user's parkour score
+        result = await db.db.users.update_one(
+            {"username": username},
+            {"$max": {"parkour_score": score}}
+        )
+        
+        user = await db.db.users.find_one({"username": username})
+        
+        return {
+            "message": "Score updated successfully",
+            "high_score": user.get("parkour_score", 0)
+        }
+    except Exception as e:
+        print(f"Error updating parkour score: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+@app.post("/api/logout")
+async def logout():
+    """Logout user"""
+    response = JSONResponse(content={"message": "Logged out successfully"})
+    response.delete_cookie("access_token")
+    return response
+
+# ==================== LEADERBOARD ENDPOINTS ====================
+
+@app.get("/api/leaderboard")
+async def get_flappy_leaderboard():
+    """Get top 10 scores for Flappy Bird"""
+    try:
+        leaderboard = await db.db.users.find(
+            {}, 
+            {"username": 1, "high_score": 1, "_id": 0}
+        ).sort("high_score", -1).limit(10).to_list(None)
+        
+        return {"leaderboard": leaderboard}
+    except Exception as e:
+        print(f"Error getting flappy leaderboard: {e}")
+        return {"leaderboard": []}
+
+@app.get("/api/parkour-leaderboard")
+async def get_parkour_leaderboard():
+    """Get top 10 scores for Parkour game"""
+    try:
+        leaderboard = await db.db.users.find(
+            {}, 
+            {"username": 1, "parkour_score": 1, "_id": 0}
+        ).sort("parkour_score", -1).limit(10).to_list(None)
+        
+        return {"leaderboard": leaderboard}
+    except Exception as e:
+        print(f"Error getting parkour leaderboard: {e}")
+        return {"leaderboard": []}
+
+# ==================== GAMEPLAY STATS ENDPOINTS ====================
+
+@app.get("/api/get-gameplay-stats")
+async def get_gameplay_stats(request: Request):
+    """Get gameplay statistics for graph"""
+    try:
+        token = request.cookies.get("access_token")
+        if not token:
+            return {"gameplayData": [], "bestLevel": 1, "avgScore": 0}
+        
+        username = auth.verify_token(token)
+        if not username:
+            return {"gameplayData": [], "bestLevel": 1, "avgScore": 0}
+        
+        # Get user data
+        user = await db.db.users.find_one({"username": username})
+        
+        # Try to get gameplay data from separate collection
+        gameplay_records = await db.db.gameplay.find(
+            {"username": username}
+        ).sort("timestamp", -1).limit(10).to_list(None)
+        
+        gameplayData = []
+        for record in gameplay_records:
+            if record.get("gameplayData"):
+                gameplayData.extend(record.get("gameplayData", []))
+        
+        # Sort by time
+        gameplayData.sort(key=lambda x: x.get('time', 0))
+        
+        return {
+            "gameplayData": gameplayData,
+            "bestLevel": user.get("best_level", 1) if user else 1,
+            "avgScore": user.get("avg_score", 0) if user else 0
+        }
+    except Exception as e:
+        print(f"Error getting gameplay stats: {e}")
+        return {"gameplayData": [], "bestLevel": 1, "avgScore": 0}
+
+@app.post("/api/save-gameplay")
+async def save_gameplay(request: Request):
+    """Save gameplay data for graph"""
+    try:
+        data = await request.json()
+        token = request.cookies.get("access_token")
+        if not token:
+            return {"error": "Not authenticated"}
+        
+        username = auth.verify_token(token)
+        if not username:
+            return {"error": "Invalid token"}
+        
+        # Update user's best level
+        finalLevel = data.get("finalLevel", 1)
+        await db.db.users.update_one(
+            {"username": username},
+            {"$max": {"best_level": finalLevel}}
+        )
+        
+        # Store gameplay data
+        gameplay_record = {
+            "username": username,
+            "finalScore": data.get("finalScore", 0),
+            "finalLevel": finalLevel,
+            "pipesPassed": data.get("pipesPassed", 0),
+            "gameplayData": data.get("gameplayData", []),
+            "timestamp": get_current_time()
+        }
+        
+        # Store in gameplay collection (create if doesn't exist)
+        try:
+            await db.db.gameplay.insert_one(gameplay_record)
+        except:
+            # If collection doesn't exist, create it
+            await db.db.create_collection("gameplay")
+            await db.db.gameplay.insert_one(gameplay_record)
+        
+        # Keep only last 10 records per user
+        all_records = await db.db.gameplay.find({"username": username}).sort("timestamp", -1).to_list(None)
+        if len(all_records) > 10:
+            for record in all_records[10:]:
+                await db.db.gameplay.delete_one({"_id": record["_id"]})
+        
+        return {"message": "Gameplay data saved"}
+    except Exception as e:
+        print(f"Error saving gameplay: {e}")
+        return {"error": str(e)}
+
+# ==================== USER STATS ENDPOINT ====================
+
+@app.get("/api/user/{username}")
+async def get_user_stats(username: str):
+    """Get user statistics"""
+    try:
+        user = await db.db.users.find_one(
+            {"username": username},
+            {"password": 0, "_id": 0}
+        )
+        
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        
+        return user
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error getting user stats: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+# ==================== HEALTH CHECK ====================
+
+@app.get("/health")
+async def health_check():
+    """Health check endpoint"""
+    return {
+        "status": "healthy",
+        "games": ["Flappy Bird", "3D Parkour Runner"],
+        "database": "connected" if db.db is not None else "disconnected"
+    }

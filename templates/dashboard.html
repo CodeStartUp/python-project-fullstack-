@@ -1,0 +1,711 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - Game Hub</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            font-family: 'Arial', sans-serif;
+        }
+        
+        .navbar {
+            background: rgba(0,0,0,0.85) !important;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 2px 20px rgba(0,0,0,0.1);
+        }
+        
+        .main-container {
+            padding: 30px;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        
+        .card {
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            transition: transform 0.3s, box-shadow 0.3s;
+            border: none;
+            overflow: hidden;
+            margin-bottom: 25px;
+        }
+        
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 15px 40px rgba(0,0,0,0.15);
+        }
+        
+        .stats-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            text-align: center;
+        }
+        
+        .stats-card .card-body {
+            padding: 30px;
+        }
+        
+        .score-display {
+            font-size: 4em;
+            font-weight: bold;
+            margin: 20px 0;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
+        }
+        
+        .stat-label {
+            font-size: 1.1em;
+            opacity: 0.9;
+            margin-bottom: 10px;
+        }
+        
+        .stat-value {
+            font-size: 2em;
+            font-weight: bold;
+        }
+        
+        .btn-play {
+            background: linear-gradient(135deg, #FFD700 0%, #FFA500 100%);
+            border: none;
+            color: #333;
+            font-weight: bold;
+            padding: 15px 40px;
+            border-radius: 50px;
+            transition: all 0.3s;
+            font-size: 1.1em;
+            margin-top: 20px;
+        }
+        
+        .btn-play:hover {
+            transform: scale(1.05);
+            box-shadow: 0 5px 20px rgba(0,0,0,0.2);
+            color: #333;
+        }
+        
+        .game-selector {
+            background: rgba(255,255,255,0.95);
+            border-radius: 15px;
+            padding: 5px;
+            margin-bottom: 20px;
+        }
+        
+        .game-btn {
+            padding: 12px 25px;
+            border: none;
+            background: transparent;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-weight: bold;
+            margin: 0 5px;
+        }
+        
+        .game-btn.active {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+        
+        .game-btn:hover:not(.active) {
+            background: rgba(102, 126, 234, 0.2);
+            transform: translateY(-2px);
+        }
+        
+        .flappy-badge {
+            background: #4EC0CA;
+            color: white;
+            padding: 5px 10px;
+            border-radius: 10px;
+            font-size: 12px;
+        }
+        
+        .parkour-badge {
+            background: #FF6B6B;
+            color: white;
+            padding: 5px 10px;
+            border-radius: 10px;
+            font-size: 12px;
+        }
+        
+        .fullscreen-btn {
+            background: rgba(102, 126, 234, 0.2);
+            border: none;
+            color: #667eea;
+            padding: 8px 15px;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .fullscreen-btn:hover {
+            background: rgba(102, 126, 234, 0.3);
+            transform: scale(1.05);
+        }
+        
+        .table {
+            margin-bottom: 0;
+        }
+        
+        .table thead {
+            background: #f8f9fa;
+        }
+        
+        .rank-1 {
+            background: linear-gradient(90deg, #FFD700, #FFF8DC);
+            font-weight: bold;
+        }
+        
+        .rank-2 {
+            background: linear-gradient(90deg, #C0C0C0, #F0F0F0);
+            font-weight: bold;
+        }
+        
+        .rank-3 {
+            background: linear-gradient(90deg, #CD7F32, #FDE8D0);
+            font-weight: bold;
+        }
+        
+        .medal {
+            font-size: 1.3em;
+        }
+        
+        canvas.graph-canvas {
+            max-height: 300px;
+            width: 100%;
+        }
+        
+        .game-icon {
+            font-size: 24px;
+            margin-right: 10px;
+        }
+        
+        @media (max-width: 768px) {
+            .main-container {
+                padding: 20px;
+            }
+            
+            .score-display {
+                font-size: 3em;
+            }
+            
+            .stat-value {
+                font-size: 1.5em;
+            }
+            
+            .game-btn {
+                padding: 8px 15px;
+                font-size: 12px;
+            }
+        }
+        
+        .fade-in {
+            animation: fadeIn 0.5s ease-in;
+        }
+        
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        kbd {
+            background: #333;
+            color: white;
+            padding: 3px 8px;
+            border-radius: 5px;
+            font-family: monospace;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 50px;
+            color: white;
+        }
+        
+        .spinner {
+            border: 3px solid rgba(255,255,255,0.3);
+            border-radius: 50%;
+            border-top: 3px solid white;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-dark">
+        <div class="container-fluid">
+            <span class="navbar-brand" style="font-size: 1.5em;">
+                🎮 Game Hub Dashboard
+            </span>
+            <div class="d-flex align-items-center">
+                <span class="navbar-text me-3">
+                    Welcome, <strong id="username">{{ username }}</strong>!
+                </span>
+                <a href="/game-select" class="btn btn-outline-light btn-sm me-2">🎮 All Games</a>
+                <button class="btn btn-outline-danger btn-sm" onclick="logout()">
+                    Logout
+                </button>
+            </div>
+        </div>
+    </nav>
+    
+    <div class="main-container fade-in">
+        <!-- Game Selector -->
+        <div class="game-selector text-center">
+            <button class="game-btn active" id="flappyBtn" onclick="selectGame('flappy')">
+                <span class="game-icon">🐦</span> Flappy Bird
+            </button>
+            <button class="game-btn" id="parkourBtn" onclick="selectGame('parkour')">
+                <span class="game-icon">🏃‍♂️</span> 3D Parkour Runner
+            </button>
+        </div>
+        
+        <div class="row">
+            <!-- Stats Card -->
+            <div class="col-md-4 mb-4">
+                <div class="card stats-card h-100">
+                    <div class="card-body">
+                        <div class="stat-label" id="gameTitle">🏆 FLAPPY BIRD HIGH SCORE</div>
+                        <div class="score-display" id="highScore">{{ high_score }}</div>
+                        <hr style="background: rgba(255,255,255,0.3);">
+                        <div class="stat-label">📊 TOTAL GAMES PLAYED</div>
+                        <div class="stat-value" id="totalGames">{{ total_games }}</div>
+                        <div class="stat-label mt-3">🎯 BEST LEVEL</div>
+                        <div class="stat-value" id="bestLevel">-</div>
+                        <a href="#" id="playGameBtn" class="btn btn-play" onclick="playCurrentGame()">
+                            🎮 PLAY NOW
+                        </a>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Graph Card -->
+            <div class="col-md-8 mb-4">
+                <div class="card h-100">
+                    <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0" id="graphTitle">📈 Flappy Bird Performance Graph</h5>
+                        <button class="fullscreen-btn" onclick="toggleFullScreen()">
+                            🖥️ Full Screen
+                        </button>
+                    </div>
+                    <div class="card-body">
+                        <canvas id="gameplayGraph" class="graph-canvas"></canvas>
+                        <div class="text-center mt-3">
+                            <small class="text-muted" id="graphHint">
+                                Shows your score progression over time
+                            </small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="row">
+            <!-- Leaderboard -->
+            <div class="col-md-12 mb-4">
+                <div class="card h-100">
+                    <div class="card-header bg-white">
+                        <h5 class="mb-0" id="leaderboardTitle">🏆 GLOBAL LEADERBOARD - FLAPPY BIRD TOP 10</h5>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-hover mb-0">
+                                <thead>
+                                    <tr>
+                                        <th style="width: 80px">Rank</th>
+                                        <th>Player</th>
+                                        <th style="width: 150px" id="scoreColumnHeader">High Score</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="leaderboardBody">
+                                    {% for player in flappy_leaderboard %}
+                                    <tr class="rank-{{ loop.index if loop.index <= 3 else '' }}">
+                                        <td>
+                                            {% if loop.index == 1 %}
+                                                <span class="medal">🥇</span> 1st
+                                            {% elif loop.index == 2 %}
+                                                <span class="medal">🥈</span> 2nd
+                                            {% elif loop.index == 3 %}
+                                                <span class="medal">🥉</span> 3rd
+                                            {% else %}
+                                                #{{ loop.index }}
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            <strong>{{ player.username }}</strong>
+                                            {% if player.username == username %}
+                                                <span class="badge bg-primary ms-2">You</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            <span class="badge bg-success fs-6">{{ player.high_score }}</span>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Tips and Stats Row -->
+        <div class="row">
+            <div class="col-md-12 mb-4">
+                <div class="card">
+                    <div class="card-header bg-white">
+                        <h5 class="mb-0" id="tipsTitle">💡 Flappy Bird Tips & Tricks</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <h6>📊 Your Statistics:</h6>
+                                <ul class="list-unstyled">
+                                    <li>🎯 Average Score: <strong id="avgScore">-</strong></li>
+                                    <li>🏆 Best Level: <strong id="bestLevelStat">-</strong></li>
+                                    <li>🎮 Games Played: <strong id="gamesPlayed">{{ total_games }}</strong></li>
+                                    <li>⭐ Current Rank: <strong id="currentRank">-</strong></li>
+                                </ul>
+                            </div>
+                            <div class="col-md-6">
+                                <h6 id="tipsContentHeader">🎮 Pro Tips:</h6>
+                                <ul class="list-unstyled" id="tipsList">
+                                    <li>✓ Tap gently for control</li>
+                                    <li>✓ Focus on the gap between pipes</li>
+                                    <li>✓ Practice the rhythm of tapping</li>
+                                    <li>✓ Use space bar or mouse click to play</li>
+                                </ul>
+                            </div>
+                        </div>
+                        <div class="alert alert-info mt-3 mb-0" id="progressionInfo">
+                            <strong>🎯 Progression System:</strong> Game speed increases every 30 points! Current speed: <span id="currentSpeed">1.2</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        let gameplayChart = null;
+        let currentGame = 'flappy';
+        let gameplayData = [];
+        
+        // Game data mapping
+        const gameData = {
+            flappy: {
+                title: 'Flappy Bird',
+                icon: '🐦',
+                color: '#4EC0CA',
+                scoreType: 'high_score',
+                endpoint: '/api/leaderboard',
+                playUrl: '/game',
+                graphHint: 'Shows your Flappy Bird score progression over time',
+                tips: [
+                    '✓ Tap gently for control',
+                    '✓ Focus on the gap between pipes',
+                    '✓ Practice the rhythm of tapping',
+                    '✓ Use space bar or mouse click to play',
+                    '✓ Each pipe passed = 10 points',
+                    '✓ Game speed increases with your score'
+                ],
+                progression: 'Game speed increases every 30 points!'
+            },
+            parkour: {
+                title: '3D Parkour Runner',
+                icon: '🏃‍♂️',
+                color: '#FF6B6B',
+                scoreType: 'parkour_score',
+                endpoint: '/api/parkour-leaderboard',
+                playUrl: '/parkour-game',
+                graphHint: 'Shows your Parkour game score progression over time',
+                tips: [
+                    '✓ Use ← → arrows to move left/right',
+                    '✓ Press SPACE to jump over obstacles',
+                    '✓ Collect gold cubes for +10 points',
+                    '✓ Avoid red obstacles or game over',
+                    '✓ Game speed increases as you progress',
+                    '✓ Mobile: Swipe to move, tap to jump'
+                ],
+                progression: 'Game speed increases as your score grows! Run faster as you progress!'
+            }
+        };
+        
+        // Select game
+        function selectGame(game) {
+            currentGame = game;
+            
+            // Update active button
+            document.getElementById('flappyBtn').classList.remove('active');
+            document.getElementById('parkourBtn').classList.remove('active');
+            document.getElementById(`${game}Btn`).classList.add('active');
+            
+            // Update UI
+            document.getElementById('gameTitle').innerHTML = `🏆 ${gameData[game].title.toUpperCase()} HIGH SCORE`;
+            document.getElementById('graphTitle').innerHTML = `📈 ${gameData[game].title} Performance Graph`;
+            document.getElementById('graphHint').textContent = gameData[game].graphHint;
+            document.getElementById('leaderboardTitle').innerHTML = `🏆 GLOBAL LEADERBOARD - ${gameData[game].title.toUpperCase()} TOP 10`;
+            document.getElementById('tipsTitle').innerHTML = `💡 ${gameData[game].title} Tips & Tricks`;
+            document.getElementById('tipsContentHeader').innerHTML = `🎮 ${gameData[game].title} Tips:`;
+            document.getElementById('progressionInfo').innerHTML = `<strong>🎯 Progression System:</strong> ${gameData[game].progression}`;
+            
+            // Update tips list
+            const tipsList = document.getElementById('tipsList');
+            tipsList.innerHTML = '';
+            gameData[game].tips.forEach(tip => {
+                const li = document.createElement('li');
+                li.innerHTML = tip;
+                tipsList.appendChild(li);
+            });
+            
+            // Update play button
+            const playBtn = document.getElementById('playGameBtn');
+            playBtn.onclick = () => playCurrentGame();
+            
+            // Load data for selected game
+            loadStats();
+            loadLeaderboard();
+            loadGameplayGraph();
+        }
+        
+        // Play current game
+        function playCurrentGame() {
+            window.location.href = gameData[currentGame].playUrl;
+        }
+        
+        // Load user stats for current game
+        async function loadStats() {
+            try {
+                const response = await fetch('/api/user/{{ username }}');
+                const data = await response.json();
+                
+                if (response.ok) {
+                    const score = currentGame === 'flappy' ? data.high_score : data.parkour_score;
+                    document.getElementById('highScore').textContent = score || 0;
+                    document.getElementById('totalGames').textContent = data.total_games || 0;
+                    document.getElementById('gamesPlayed').textContent = data.total_games || 0;
+                    document.getElementById('avgScore').textContent = data.avg_score || 0;
+                    document.getElementById('bestLevel').textContent = data.best_level || 1;
+                    document.getElementById('bestLevelStat').textContent = data.best_level || 1;
+                }
+            } catch (error) {
+                console.error('Error loading stats:', error);
+            }
+        }
+        
+        // Load leaderboard for current game
+        async function loadLeaderboard() {
+            try {
+                const response = await fetch(gameData[currentGame].endpoint);
+                const data = await response.json();
+                
+                if (response.ok && data.leaderboard) {
+                    const tbody = document.getElementById('leaderboardBody');
+                    tbody.innerHTML = '';
+                    
+                    data.leaderboard.forEach((player, index) => {
+                        const rank = index + 1;
+                        let rankHtml = '';
+                        if (rank === 1) rankHtml = '<span class="medal">🥇</span> 1st';
+                        else if (rank === 2) rankHtml = '<span class="medal">🥈</span> 2nd';
+                        else if (rank === 3) rankHtml = '<span class="medal">🥉</span> 3rd';
+                        else rankHtml = `#${rank}`;
+                        
+                        const score = currentGame === 'flappy' ? player.high_score : player.parkour_score;
+                        
+                        const row = tbody.insertRow();
+                        row.className = rank <= 3 ? `rank-${rank}` : '';
+                        row.innerHTML = `
+                            <td>${rankHtml}</td>
+                            <td>
+                                <strong>${player.username}</strong>
+                                ${player.username === '{{ username }}' ? '<span class="badge bg-primary ms-2">You</span>' : ''}
+                            </td>
+                            <td><span class="badge bg-success fs-6">${score || 0}</span></td>
+                        `;
+                        
+                        // Update current rank
+                        if (player.username === '{{ username }}') {
+                            document.getElementById('currentRank').textContent = `#${rank}`;
+                        }
+                    });
+                }
+            } catch (error) {
+                console.error('Error loading leaderboard:', error);
+            }
+        }
+        
+        // Load gameplay graph data
+        async function loadGameplayGraph() {
+            try {
+                const response = await fetch('/api/get-gameplay-stats');
+                const data = await response.json();
+                
+                if (response.ok && data.gameplayData && data.gameplayData.length > 0) {
+                    gameplayData = data.gameplayData;
+                    updateGraph(gameplayData);
+                } else {
+                    // Show placeholder
+                    updateGraph([]);
+                }
+            } catch(error) {
+                console.error('Error loading graph:', error);
+                updateGraph([]);
+            }
+        }
+        
+        // Update graph with data
+        function updateGraph(data) {
+            const ctx = document.getElementById('gameplayGraph').getContext('2d');
+            
+            if (gameplayChart) {
+                gameplayChart.destroy();
+            }
+            
+            if (data && data.length > 0) {
+                const scores = data.map(d => d.score);
+                const times = data.map(d => d.time.toFixed(1));
+                
+                gameplayChart = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: times,
+                        datasets: [{
+                            label: `${gameData[currentGame].title} Score Progression`,
+                            data: scores,
+                            borderColor: gameData[currentGame].color,
+                            backgroundColor: gameData[currentGame].color + '20',
+                            borderWidth: 3,
+                            tension: 0.4,
+                            fill: true,
+                            pointRadius: 4,
+                            pointHoverRadius: 6,
+                            pointBackgroundColor: gameData[currentGame].color,
+                            pointBorderColor: 'white',
+                            pointBorderWidth: 2
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: true,
+                        plugins: {
+                            legend: {
+                                position: 'top',
+                            },
+                            title: {
+                                display: true,
+                                text: `Your ${gameData[currentGame].title} Score Progression Over Time`
+                            },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        return `Score: ${context.raw}`;
+                                    }
+                                }
+                            }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                title: {
+                                    display: true,
+                                    text: 'Score'
+                                }
+                            },
+                            x: {
+                                title: {
+                                    display: true,
+                                    text: 'Time (seconds)'
+                                }
+                            }
+                        }
+                    }
+                });
+            } else {
+                // Show placeholder message
+                gameplayChart = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: ['Play a game to see graph'],
+                        datasets: [{
+                            label: `${gameData[currentGame].title} Score Progression`,
+                            data: [0],
+                            borderColor: gameData[currentGame].color,
+                            backgroundColor: gameData[currentGame].color + '20',
+                            borderWidth: 2
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: true,
+                        plugins: {
+                            title: {
+                                display: true,
+                                text: `No gameplay data yet. Play ${gameData[currentGame].title} to see your progress!`
+                            }
+                        }
+                    }
+                });
+            }
+        }
+        
+        // Toggle full screen
+        function toggleFullScreen() {
+            const graphCanvas = document.getElementById('gameplayGraph');
+            if (graphCanvas.requestFullscreen) {
+                graphCanvas.requestFullscreen();
+            } else if (graphCanvas.webkitRequestFullscreen) {
+                graphCanvas.webkitRequestFullscreen();
+            }
+        }
+        
+        // Refresh data periodically
+        async function refreshAll() {
+            await loadStats();
+            await loadLeaderboard();
+            await loadGameplayGraph();
+        }
+        
+        async function logout() {
+            try {
+                const response = await fetch('/api/logout', { method: 'POST' });
+                if (response.ok) {
+                    document.cookie = 'access_token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
+                    window.location.href = '/';
+                }
+            } catch (error) {
+                console.error('Error logging out:', error);
+                window.location.href = '/';
+            }
+        }
+        
+        // Initial load
+        selectGame('flappy');
+        
+        // Auto-refresh every 30 seconds
+        setInterval(refreshAll, 30000);
+    </script>
+</body>
+</html>
